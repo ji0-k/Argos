@@ -31,10 +31,4 @@ class Config:
     ITS_REGION = os.getenv('ITS_REGION', '서울,경기도')
     ITS_REFRESH_INTERVAL = int(os.getenv('ITS_REFRESH_INTERVAL', '120'))
 
-    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', '587'))
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME', '')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', '')
-    ALERT_RECIPIENT = os.getenv('ALERT_RECIPIENT', '')
-
     CORS_ORIGINS = ['http://localhost:3000', 'http://react:3000']

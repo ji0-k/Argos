@@ -48,7 +48,6 @@ def _infer(endpoint: str, frame_b64: str, cctv_id: int) -> dict | None:
 
 def _process(app, cctv_id: int, session_id: int, frame, socketio):
     from models.db import db, DetectionLog, CctvList
-    from services.alert import send_alert_email
 
     frame_b64 = _encode(frame)
     results = [
@@ -86,13 +85,6 @@ def _process(app, cctv_id: int, session_id: int, frame, socketio):
                 'snapshot_path': snapshot,
             }
             socketio.emit('alert', alert_data)
-
-            try:
-                send_alert_email(alert_data)
-                log.alert_sent = True
-                db.session.commit()
-            except Exception as e:
-                logger.error('이메일 발송 실패: %s', e)
 
 
 def start_detection(cctv_id: int, session_id: int, stream_url: str, socketio, app):

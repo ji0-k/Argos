@@ -58,7 +58,6 @@ class DetectionLog(db.Model):
     confidence = db.Column(db.Float, nullable=False)
     snapshot_path = db.Column(db.Text, nullable=True)
     detected_at = db.Column(db.DateTime, default=datetime.utcnow)
-    alert_sent = db.Column(db.Boolean, default=False)
 
     cctv = db.relationship('CctvList', backref='detection_logs')
 
@@ -72,7 +71,6 @@ class DetectionLog(db.Model):
             'confidence': self.confidence,
             'snapshot_path': self.snapshot_path,
             'detected_at': self.detected_at.isoformat() if self.detected_at else None,
-            'alert_sent': self.alert_sent,
         }
 
 

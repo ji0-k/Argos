@@ -26,8 +26,7 @@ CREATE TABLE IF NOT EXISTS detection_log (
     type            VARCHAR(50) NOT NULL,
     confidence      FLOAT NOT NULL,
     snapshot_path   TEXT,
-    detected_at     TIMESTAMP DEFAULT NOW(),
-    alert_sent      BOOLEAN DEFAULT FALSE
+    detected_at     TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS admin_user (
