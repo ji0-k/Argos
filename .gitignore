@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+build/
+dist/
+.DS_Store
+captures/
+ai_server/models/*.h5
+ai_server/models/yolov5_vehicle/*.pt
