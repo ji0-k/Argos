@@ -67,20 +67,16 @@ class DetectionManager:
         cap.release()
 
     def _handle_detection(self, cctv_id: int, session_id: int, result: dict, frame):
-        """이상 감지 시 DB 저장 + SocketIO 알림 + 이메일 경보"""
+        """이상 감지 시 DB 저장 + WebSocket 알림"""
         from models.db import db, DetectionLog, CctvList
-        from services.alert import send_alert_email
         from app import socketio
 
         detection_type = result.get("type")
         confidence = result.get("confidence", 0.0)
 
-        # 스냅샷 저장
         snapshot_path = self._save_snapshot(frame, cctv_id, detection_type)
-
         cctv = CctvList.query.get(cctv_id)
 
-        # DB 저장
         log = DetectionLog(
             cctv_id=cctv_id,
             session_id=session_id,
@@ -91,24 +87,14 @@ class DetectionManager:
         db.session.add(log)
         db.session.commit()
 
-        # WebSocket 알림
-        alert_data = {
+        socketio.emit("alert", {
             "cctv_id": cctv_id,
             "cctv_name": cctv.name if cctv else f"CCTV #{cctv_id}",
             "type": detection_type,
             "confidence": confidence,
             "detected_at": datetime.utcnow().isoformat(),
             "snapshot_path": snapshot_path,
-        }
-        socketio.emit("alert", alert_data)
-
-        # 이메일 경보 (비동기)
-        if not log.alert_sent:
-            threading.Thread(
-                target=send_alert_email, args=(alert_data,), daemon=True
-            ).start()
-            log.alert_sent = True
-            db.session.commit()
+        })
 
     @staticmethod
     def _save_snapshot(frame, cctv_id: int, detection_type: str) -> str:

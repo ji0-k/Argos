@@ -41,16 +41,12 @@ class Config:
     ITS_REGION = os.getenv("ITS_REGION", "서울,경기도").split(",")
     ITS_REFRESH_INTERVAL = int(os.getenv("ITS_REFRESH_INTERVAL", "120"))
 
-    # 이메일 경보
-    MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
-    MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
-    MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
-    ALERT_RECIPIENT = os.getenv("ALERT_RECIPIENT", "")
-
     # JWT
     JWT_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "jwt-secret-key")
     JWT_ACCESS_TOKEN_EXPIRES = 3600  # 1시간
 
     # 캡처 이미지 저장 경로
     CAPTURES_DIR = os.getenv("CAPTURES_DIR", os.path.join(os.path.dirname(__file__), "captures"))
+
+    CORS_ORIGINS = ["http://localhost:3000", "http://localhost:3001",
+                    "http://localhost:3002", "http://localhost:3003", "http://react:3000"]
