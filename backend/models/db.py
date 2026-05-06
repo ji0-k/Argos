@@ -74,7 +74,7 @@ class DetectionLog(db.Model):
             "type": self.type,
             "confidence": self.confidence,
             "snapshot_path": self.snapshot_path,
-            "detected_at": self.detected_at.isoformat() if self.detected_at else None,
+            "detected_at": (self.detected_at.isoformat() + "Z") if self.detected_at else None,
         }
 
 

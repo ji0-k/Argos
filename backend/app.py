@@ -40,12 +40,27 @@ def create_app():
 
 app = create_app()
 
+def _auto_start_detection(flask_app):
+    from models.db import db, CctvList, DetectionSession
+    from routes.cctv import detection_manager, AUTO_DETECT_NAMES
+    with flask_app.app_context():
+        for name in AUTO_DETECT_NAMES:
+            cctv = CctvList.query.filter(CctvList.name.like(f"%{name}%")).first()
+            if not cctv:
+                continue
+            session = DetectionSession(cctv_id=cctv.id)
+            db.session.add(session)
+            db.session.commit()
+            detection_manager.start(cctv.id, session.id, cctv.stream_url, flask_app)
+
+
 if __name__ == "__main__":
     from services.scheduler import start_scheduler
 
     with app.app_context():
         db.create_all()
         start_scheduler(app)
+        _auto_start_detection(app)
 
     port = int(os.getenv("PORT", 5000))
     socketio.run(app, host="0.0.0.0", port=port, debug=False, use_reloader=False)

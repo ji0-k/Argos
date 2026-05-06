@@ -43,6 +43,7 @@ export default function CctvStream() {
       const res = await cctvApi.getList();
       const found = res.data.find(c => c.id === cctvId);
       setCctv(found || null);
+      if (found?.detecting) setDetecting(true);
     } catch {}
   };
 
@@ -178,25 +179,38 @@ export default function CctvStream() {
 
             {/* 감지 컨트롤 */}
             <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
-              {!detecting ? (
-                <button
-                  id="btn-start-detection"
-                  onClick={handleStartDetection}
-                  disabled={loading}
-                  className="btn btn-primary"
-                  style={{ flex: 1, justifyContent: 'center', padding: '14px' }}
-                >
-                  {loading ? <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> : '🚀 감지 시작'}
-                </button>
+              {cctv?.detection_allowed ? (
+                /* 허용된 CCTV */
+                cctv?.detecting && !sessionId ? (
+                  /* 자동 감지 중 */
+                  <div style={{
+                    flex: 1, padding: '14px', borderRadius: 'var(--radius-md)',
+                    background: '#f0fdf4', border: '1px solid #86efac',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 8, color: '#16a34a', fontWeight: 600, fontSize: '0.9rem',
+                  }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a', display: 'inline-block', animation: 'pulse 1.2s infinite' }} />
+                    🤖 자동 감지 중
+                  </div>
+                ) : !detecting ? (
+                  <button onClick={handleStartDetection} disabled={loading} className="btn btn-primary"
+                    style={{ flex: 1, justifyContent: 'center', padding: '14px' }}>
+                    {loading ? <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> : '🚀 감지 시작'}
+                  </button>
+                ) : (
+                  <button onClick={handleStopDetection} disabled={loading} className="btn btn-danger"
+                    style={{ flex: 1, justifyContent: 'center', padding: '14px' }}>
+                    {loading ? <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> : '⏹ 감지 종료'}
+                  </button>
+                )
               ) : (
-                <button
-                  id="btn-stop-detection"
-                  onClick={handleStopDetection}
-                  disabled={loading}
-                  className="btn btn-danger"
-                  style={{ flex: 1, justifyContent: 'center', padding: '14px' }}
-                >
-                  {loading ? <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> : '⏹ 감지 종료'}
+                /* 비허용 CCTV */
+                <button disabled style={{
+                  flex: 1, padding: '14px', borderRadius: 'var(--radius-md)',
+                  background: '#f1f5f9', border: '1px solid #e2e8f0',
+                  color: '#94a3b8', fontWeight: 600, fontSize: '0.9rem', cursor: 'not-allowed',
+                }}>
+                  🔒 감지 시작 (개발 중)
                 </button>
               )}
             </div>

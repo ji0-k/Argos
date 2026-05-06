@@ -12,9 +12,12 @@ logger = logging.getLogger(__name__)
 class DetectionManager:
     """감지 세션을 관리하는 매니저 - 로컬 YOLO 추론"""
 
+    DB_SAVE_INTERVAL = 60  # 초
+
     def __init__(self):
         self._threads: dict[int, threading.Thread] = {}
         self._running: dict[int, bool] = {}
+        self._last_saved: dict[int, dict] = {}  # {cctv_id: {type: timestamp}}
 
     def start(self, cctv_id: int, session_id: int, stream_url: str, app):
         """백그라운드 스레드에서 감지 루프 시작"""
@@ -35,6 +38,8 @@ class DetectionManager:
     def stop(self, cctv_id: int):
         """감지 루프 중지"""
         self._running[cctv_id] = False
+        from services.inference import LATEST_BOXES
+        LATEST_BOXES.pop(cctv_id, None)
         logger.info(f"감지 중지 요청 (cctv_id={cctv_id})")
 
     def _detection_loop(self, cctv_id: int, session_id: int, stream_url: str, app):
@@ -57,7 +62,7 @@ class DetectionManager:
 
                     for result in [fire_result, vehicle_result]:
                         if result and result.get("type") != "normal":
-                            self._handle_detection(cctv_id, session_id, result, frame)
+                            self._maybe_save(cctv_id, session_id, result, frame)
 
                 except Exception as e:
                     logger.error(f"감지 루프 오류: {e}")
@@ -65,6 +70,15 @@ class DetectionManager:
                 time.sleep(frame_interval)
 
         cap.release()
+
+    def _maybe_save(self, cctv_id: int, session_id: int, result: dict, frame):
+        det_type = result.get("type")
+        now = time.time()
+        last = self._last_saved.setdefault(cctv_id, {})
+        if now - last.get(det_type, 0) < self.DB_SAVE_INTERVAL:
+            return
+        last[det_type] = now
+        self._handle_detection(cctv_id, session_id, result, frame)
 
     def _handle_detection(self, cctv_id: int, session_id: int, result: dict, frame):
         """이상 감지 시 DB 저장 + WebSocket 알림"""

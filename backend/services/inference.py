@@ -13,6 +13,9 @@ STOPPED_HISTORY = {}                # cctv_id → deque of centroids
 STOPPED_FRAMES = 4                  # N프레임 동안 안 움직이면 정차 판단
 STOPPED_MOVE_PX = 20               # 이 픽셀 이하로 움직이면 정차로 간주
 
+# cctv_id → [(x1,y1,x2,y2, label, conf, bgr_color), ...]
+LATEST_BOXES: dict = {}
+
 
 def _load_vehicle_model():
     global _vehicle_model
@@ -80,18 +83,25 @@ def infer_vehicle(frame_bgr: np.ndarray, cctv_id: int = 0) -> dict:
         boxes = results.boxes
 
         vehicle_data = []
+        raw_boxes = []
         if boxes is not None:
             for cls, conf, xyxy in zip(boxes.cls, boxes.conf, boxes.xyxy):
                 if int(cls) in VEHICLE_COCO_IDS:
                     x1, y1, x2, y2 = xyxy.tolist()
                     cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
                     vehicle_data.append((cx, cy, float(conf)))
+                    raw_boxes.append((int(x1), int(y1), int(x2), int(y2), float(conf)))
 
         n = len(vehicle_data)
         avg_conf = sum(c for _, _, c in vehicle_data) / n if n else 0.0
 
         # --- 정체 판단 ---
         if n >= CONGESTION_THRESHOLD:
+            # 빨간 박스
+            LATEST_BOXES[cctv_id] = [
+                (x1, y1, x2, y2, f"Congestion {conf:.0%}", conf, (0, 50, 220))
+                for x1, y1, x2, y2, conf in raw_boxes
+            ]
             return {"type": "congestion", "confidence": round(avg_conf, 3)}
 
         # --- 정차 판단 (프레임 간 이동 추적) ---
@@ -106,6 +116,10 @@ def infer_vehicle(frame_bgr: np.ndarray, cctv_id: int = 0) -> dict:
                     for cx1, cy1 in last:
                         dist = ((cx1 - cx0) ** 2 + (cy1 - cy0) ** 2) ** 0.5
                         if dist < STOPPED_MOVE_PX:
+                            LATEST_BOXES[cctv_id] = [
+                                (x1, y1, x2, y2, f"Stopped {conf:.0%}", conf, (0, 165, 255))
+                                for x1, y1, x2, y2, conf in raw_boxes
+                            ]
                             stopped_conf = round(avg_conf * (1 - dist / STOPPED_MOVE_PX), 3)
                             return {"type": "stopped_vehicle", "confidence": stopped_conf}
 
