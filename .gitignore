@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# AI Model weights (large files)
+*.h5
+*.pt
+*.pth
+*.onnx
+*.weights
+ai_server/models/yolov5_vehicle/*.pt
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React build output
+frontend/build/
+frontend/dist/
+
+# Captured images
+captures/*.jpg
+captures/*.png
+captures/*.jpeg
+
+# Database
+*.sqlite3
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Logs
+*.log
+logs/

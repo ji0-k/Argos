@@ -1,0 +1,17 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+Pillow==10.3.0
+numpy==1.26.4
+requests==2.31.0
+python-dotenv==1.0.1
+
+# Fire/Smoke Detection - HuggingFace ViT 모델
+transformers==4.41.1
+torch==2.3.0
+torchvision==0.18.0
+
+# Vehicle Detection - YOLOv5 (torch.hub)
+# torch.hub.load('ultralytics/yolov5', 'yolov5s') 로 자동 다운로드
+opencv-python-headless==4.9.0.80
+pandas==2.2.2
