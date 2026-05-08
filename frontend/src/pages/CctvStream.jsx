@@ -32,7 +32,17 @@ export default function CctvStream() {
     const unsubscribe = subscribeToAlerts((alertData) => {
       if (alertData.cctv_id === cctvId) {
         setLatestResult(alertData);
-        fetchLogs();
+        // 즉시 로그 목록 맨 위에 추가
+        const newLog = {
+          id: `ws-${Date.now()}`,
+          type: alertData.type,
+          confidence: alertData.confidence,
+          detected_at: alertData.detected_at,
+          cctv_name: alertData.cctv_name,
+          cctv_id: alertData.cctv_id,
+        };
+        setLogs(prev => [newLog, ...prev].slice(0, 10));
+        setLogsTotal(prev => prev + 1);
       }
     });
     return unsubscribe;

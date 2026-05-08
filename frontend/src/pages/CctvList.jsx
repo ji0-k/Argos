@@ -70,7 +70,15 @@ export default function CctvList() {
   useEffect(() => {
     if (loading || leafletRef.current || !mapRef.current) return;
 
-    const map = L.map(mapRef.current, { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([36.5, 127.8], 8);
+    const koreaBounds = L.latLngBounds([33.0, 124.5], [38.9, 130.1]);
+    const map = L.map(mapRef.current, {
+      zoomControl: true,
+      zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false,
+      maxBounds: koreaBounds,
+      maxBoundsViscosity: 1.0,
+      minZoom: 6,
+      maxZoom: 17,
+    }).setView([36.5, 127.8], 8);
     leafletRef.current = map;
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {

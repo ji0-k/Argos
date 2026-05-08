@@ -25,7 +25,7 @@ class StreamManager:
         self._urls[cctv_id] = stream_url
         self._locks.setdefault(cctv_id, threading.Lock())
         if not cap.isOpened():
-            logger.warning(f"스트림 열기 실패 (id={cctv_id})")
+            logger.debug(f"스트림 열기 실패 (id={cctv_id})")
         return cap
 
     def get_frames(self, cctv_id: int, stream_url: str):

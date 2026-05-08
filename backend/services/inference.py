@@ -7,11 +7,12 @@ logger = logging.getLogger(__name__)
 _vehicle_model = None
 _fire_model = None
 
-VEHICLE_COCO_IDS = {2, 3, 5, 7}   # car, motorcycle, bus, truck
-CONGESTION_THRESHOLD = 6            # 차량 6대 이상이면 정체
-STOPPED_HISTORY = {}                # cctv_id → deque of centroids
-STOPPED_FRAMES = 4                  # N프레임 동안 안 움직이면 정차 판단
-STOPPED_MOVE_PX = 20               # 이 픽셀 이하로 움직이면 정차로 간주
+VEHICLE_COCO_IDS  = {2, 3, 5, 7}  # car, motorcycle, bus, truck
+STOPPED_PX        = 80             # 이 픽셀 이하 이동이면 정지로 간주
+CONGESTION_FRAMES = 2              # ≈3초 (2프레임 × 2s)
+CONGESTION_COUNT  = 3              # 정지 차량 3대 이상 → 정체
+STOPPED_FRAMES    = 5              # 10초 (5프레임 × 2s) → 정차
+TRACK_HISTORY     = {}             # cctv_id → {track_id: deque of (cx,cy,x1,y1,x2,y2,conf)}
 
 # cctv_id → [(x1,y1,x2,y2, label, conf, bgr_color), ...]
 LATEST_BOXES: dict = {}
@@ -49,80 +50,118 @@ def _load_fire_model():
 
 
 def infer_fire_smoke(frame_bgr: np.ndarray) -> dict:
-    """화재/연기 감지"""
+    """화재/연기 감지 — YOLO 모델 우선, 없으면 HSV 색상 분석"""
     model = _load_fire_model()
-    if not model:
-        return {"type": "normal", "confidence": 0.0}
-
-    try:
-        results = model(frame_bgr, verbose=False)[0]
-        boxes = results.boxes
-        if boxes is None or len(boxes) == 0:
+    if model:
+        try:
+            results = model(frame_bgr, verbose=False)[0]
+            boxes = results.boxes
+            if boxes is not None and len(boxes) > 0:
+                best_idx = int(boxes.conf.argmax())
+                best_conf = float(boxes.conf[best_idx])
+                best_cls = int(boxes.cls[best_idx])
+                cls_name = (model.names.get(best_cls) or "fire").lower()
+                if "smoke" in cls_name:
+                    return {"type": "normal", "confidence": 0.0}  # 연기 감지 비활성화
+                return {"type": "fire", "confidence": round(best_conf, 3)}
+            return {"type": "normal", "confidence": 0.0}
+        except Exception as e:
+            logger.error(f"화재 추론 오류: {e}")
             return {"type": "normal", "confidence": 0.0}
 
-        best_idx = int(boxes.conf.argmax())
-        best_conf = float(boxes.conf[best_idx])
-        best_cls = int(boxes.cls[best_idx])
-        cls_name = (model.names.get(best_cls) or "fire").lower()
+    return _infer_fire_hsv(frame_bgr)
 
-        det_type = "smoke" if "smoke" in cls_name else "fire"
-        return {"type": det_type, "confidence": round(best_conf, 3)}
 
-    except Exception as e:
-        logger.error(f"화재 추론 오류: {e}")
-        return {"type": "normal", "confidence": 0.0}
+def _infer_fire_hsv(frame_bgr: np.ndarray) -> dict:
+    """HSV 색상 분석 기반 화재/연기 감지 (모델 없을 때 fallback)"""
+    import cv2
+
+    h, w = frame_bgr.shape[:2]
+    total = h * w
+
+    hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+
+    # 화재: 붉은~주황 계열, 고채도, 고명도
+    fire_mask = (
+        cv2.inRange(hsv, np.array([0,  150, 150]), np.array([35, 255, 255])) |
+        cv2.inRange(hsv, np.array([160, 150, 150]), np.array([180, 255, 255]))
+    )
+    fire_ratio = cv2.countNonZero(fire_mask) / total
+
+    if fire_ratio > 0.04:
+        conf = round(min(fire_ratio * 15, 0.95), 3)
+        return {"type": "fire", "confidence": conf}
+
+    return {"type": "normal", "confidence": 0.0}
 
 
 def infer_vehicle(frame_bgr: np.ndarray, cctv_id: int = 0) -> dict:
-    """차량 감지 — 정체/정차 판단"""
+    """차량 감지 — ByteTrack 기반 정체/정차 판단"""
     from collections import deque
 
     try:
         model = _load_vehicle_model()
-        results = model(frame_bgr, verbose=False)[0]
+        results = model.track(frame_bgr, persist=True, verbose=False, tracker="bytetrack.yaml")[0]
         boxes = results.boxes
 
-        vehicle_data = []
-        raw_boxes = []
-        if boxes is not None:
-            for cls, conf, xyxy in zip(boxes.cls, boxes.conf, boxes.xyxy):
+        # 트래킹 결과 파싱
+        tracks = []
+        if boxes is not None and boxes.id is not None:
+            for tid, cls, conf, xyxy in zip(boxes.id, boxes.cls, boxes.conf, boxes.xyxy):
                 if int(cls) in VEHICLE_COCO_IDS:
                     x1, y1, x2, y2 = xyxy.tolist()
                     cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-                    vehicle_data.append((cx, cy, float(conf)))
-                    raw_boxes.append((int(x1), int(y1), int(x2), int(y2), float(conf)))
+                    tracks.append((int(tid), cx, cy, int(x1), int(y1), int(x2), int(y2), float(conf)))
 
-        n = len(vehicle_data)
-        avg_conf = sum(c for _, _, c in vehicle_data) / n if n else 0.0
+        hist = TRACK_HISTORY.setdefault(cctv_id, {})
 
-        # --- 정체 판단 ---
-        if n >= CONGESTION_THRESHOLD:
-            # 빨간 박스
+        # 사라진 트랙 제거
+        active_ids = {t[0] for t in tracks}
+        for tid in list(hist.keys()):
+            if tid not in active_ids:
+                del hist[tid]
+
+        # 트랙 히스토리 업데이트
+        maxlen = max(STOPPED_FRAMES, CONGESTION_FRAMES)
+        for tid, cx, cy, x1, y1, x2, y2, conf in tracks:
+            hist.setdefault(tid, deque(maxlen=maxlen)).append((cx, cy, x1, y1, x2, y2, conf))
+
+        if not tracks:
+            LATEST_BOXES.pop(cctv_id, None)
+            return {"type": "normal", "confidence": 0.0}
+
+        def is_stopped(dq, n):
+            if len(dq) < n:
+                return False
+            pts = list(dq)[-n:]
+            cx0, cy0 = pts[0][0], pts[0][1]
+            return all(((p[0]-cx0)**2 + (p[1]-cy0)**2)**0.5 <= STOPPED_PX for p in pts[1:])
+
+        # 정체: 3초 이상(CONGESTION_FRAMES) 정지 차량이 CONGESTION_COUNT대 이상
+        congested_tids = [tid for tid, dq in hist.items() if is_stopped(dq, CONGESTION_FRAMES)]
+        if len(congested_tids) >= CONGESTION_COUNT:
+            conf = sum(t[7] for t in tracks) / len(tracks)
             LATEST_BOXES[cctv_id] = [
-                (x1, y1, x2, y2, f"Congestion {conf:.0%}", conf, (0, 50, 220))
-                for x1, y1, x2, y2, conf in raw_boxes
+                (t[3], t[4], t[5], t[6], f"Congestion {t[7]:.0%}", t[7], (0, 50, 220))
+                for t in tracks
             ]
-            return {"type": "congestion", "confidence": round(avg_conf, 3)}
+            return {"type": "congestion", "confidence": round(conf, 3)}
 
-        # --- 정차 판단 (프레임 간 이동 추적) ---
-        if n > 0:
-            centroids = [(cx, cy) for cx, cy, _ in vehicle_data]
-            hist = STOPPED_HISTORY.setdefault(cctv_id, deque(maxlen=STOPPED_FRAMES))
-            hist.append(centroids)
+        # 정차: 10초 이상(STOPPED_FRAMES) 정지 차량 존재
+        for tid, dq in hist.items():
+            if is_stopped(dq, STOPPED_FRAMES):
+                t = next((x for x in tracks if x[0] == tid), None)
+                if t:
+                    LATEST_BOXES[cctv_id] = [
+                        (t[3], t[4], t[5], t[6], f"Stopped {t[7]:.0%}", t[7], (0, 165, 255))
+                    ]
+                    return {"type": "stopped_vehicle", "confidence": round(t[7], 3)}
 
-            if len(hist) == STOPPED_FRAMES:
-                first, last = hist[0], hist[-1]
-                for cx0, cy0 in first:
-                    for cx1, cy1 in last:
-                        dist = ((cx1 - cx0) ** 2 + (cy1 - cy0) ** 2) ** 0.5
-                        if dist < STOPPED_MOVE_PX:
-                            LATEST_BOXES[cctv_id] = [
-                                (x1, y1, x2, y2, f"Stopped {conf:.0%}", conf, (0, 165, 255))
-                                for x1, y1, x2, y2, conf in raw_boxes
-                            ]
-                            stopped_conf = round(avg_conf * (1 - dist / STOPPED_MOVE_PX), 3)
-                            return {"type": "stopped_vehicle", "confidence": stopped_conf}
-
+        # 정상: 모든 차량에 초록 박스
+        LATEST_BOXES[cctv_id] = [
+            (t[3], t[4], t[5], t[6], f"#{t[0]}", t[7], (0, 180, 60))
+            for t in tracks
+        ]
         return {"type": "normal", "confidence": 0.0}
 
     except Exception as e:

@@ -1,3 +1,7 @@
+# eventlet 패치 전에 ultralytics 미리 임포트 (스레드 내 circular import 방지)
+import ultralytics  # noqa: F401
+import cv2          # noqa: F401
+
 import eventlet
 eventlet.monkey_patch()
 
@@ -55,12 +59,15 @@ def _auto_start_detection(flask_app):
 
 
 if __name__ == "__main__":
+    import threading
     from services.scheduler import start_scheduler
 
     with app.app_context():
         db.create_all()
         start_scheduler(app)
-        _auto_start_detection(app)
 
-    port = int(os.getenv("PORT", 5000))
+    # YOLO 모델 로딩/스트림 연결을 백그라운드에서 처리 (Flask 응답 차단 방지)
+    threading.Thread(target=_auto_start_detection, args=(app,), daemon=True).start()
+
+    port = int(os.getenv("PORT", 5001))
     socketio.run(app, host="0.0.0.0", port=port, debug=False, use_reloader=False)

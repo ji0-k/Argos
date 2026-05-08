@@ -11,7 +11,7 @@ stream_manager = StreamManager()
 detection_manager = DetectionManager()
 
 # 개발 단계에서 감지를 허용할 CCTV 이름 키워드
-AUTO_DETECT_NAMES = ["서초", "[서울]경부동탄터널(부산3)"]
+AUTO_DETECT_NAMES = ["서초", "[부산]경부동탄터널(부산3)"]
 
 def _detection_allowed(cctv_name: str) -> bool:
     return any(k in cctv_name for k in AUTO_DETECT_NAMES)

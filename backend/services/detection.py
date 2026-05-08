@@ -42,19 +42,33 @@ class DetectionManager:
         LATEST_BOXES.pop(cctv_id, None)
         logger.info(f"감지 중지 요청 (cctv_id={cctv_id})")
 
+    RETRY_LIMIT = 10       # 연속 실패 허용 횟수
+    RETRY_PAUSE = 300      # 실패 후 재시도 대기 (초)
+
     def _detection_loop(self, cctv_id: int, session_id: int, stream_url: str, app):
         """프레임별 YOLO 추론 루프"""
         from services.inference import infer_fire_smoke, infer_vehicle
 
         cap = cv2.VideoCapture(stream_url)
-        frame_interval = 2.0  # 2초마다 추론
+        frame_interval = 2.0
+        fail_count = 0
 
         with app.app_context():
             while self._running.get(cctv_id, False):
                 ret, frame = cap.read()
                 if not ret:
-                    time.sleep(1)
+                    fail_count += 1
+                    if fail_count >= self.RETRY_LIMIT:
+                        logger.warning(f"스트림 {fail_count}회 실패 (id={cctv_id}) — {self.RETRY_PAUSE}초 후 재시도")
+                        cap.release()
+                        time.sleep(self.RETRY_PAUSE)
+                        cap = cv2.VideoCapture(stream_url)
+                        fail_count = 0
+                    else:
+                        time.sleep(1)
                     continue
+
+                fail_count = 0
 
                 try:
                     fire_result = infer_fire_smoke(frame)
@@ -73,6 +87,11 @@ class DetectionManager:
 
     def _maybe_save(self, cctv_id: int, session_id: int, result: dict, frame):
         det_type = result.get("type")
+        confidence = result.get("confidence", 0.0)
+
+        if confidence < 0.7:
+            return
+
         now = time.time()
         last = self._last_saved.setdefault(cctv_id, {})
         if now - last.get(det_type, 0) < self.DB_SAVE_INTERVAL:
