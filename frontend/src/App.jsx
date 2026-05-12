@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import CctvList from './pages/CctvList';
 import CctvStream from './pages/CctvStream';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
-import ToastNotification from './components/ToastNotification';
 
 function PrivateRoute({ children }) {
   return localStorage.getItem('adminToken') ? children : <Navigate to="/admin/login" replace />;
@@ -29,19 +28,14 @@ function Navbar() {
   ];
 
   return (
-    <header style={{
-      position: 'sticky', top: 0, zIndex: 100,
-      background: 'white', borderBottom: '1px solid #e2e8f0',
-      padding: '0 32px', display: 'flex', alignItems: 'center',
-      justifyContent: 'space-between', height: 64,
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    }}>
+    <header className="nav-header">
       {/* 로고 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div className="nav-logo">
         <div style={{
           width: 36, height: 36, borderRadius: 10,
           background: 'linear-gradient(135deg,#10b981,#059669)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
         }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
             <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/>
@@ -50,12 +44,12 @@ function Navbar() {
         </div>
         <div>
           <div style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.2, color: '#0f172a' }}>ITS 교통관제</div>
-          <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>Smart City Traffic Control</div>
+          <div className="nav-logo-sub" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 500 }}>Smart City Traffic Control</div>
         </div>
       </div>
 
       {/* 탭 네비게이션 */}
-      <nav style={{ display: 'flex', gap: 4 }}>
+      <nav className="nav-tabs">
         {tabs.filter(t => !t.auth || token).map(tab => {
           const active = pathname === tab.path || (tab.path !== '/' && pathname.startsWith(tab.path));
           return (
@@ -67,7 +61,7 @@ function Navbar() {
                 color: active ? '#10b981' : '#64748b',
                 background: active ? '#f0fdf4' : 'transparent',
                 borderBottom: active ? '2px solid #10b981' : '2px solid transparent',
-                textDecoration: 'none', transition: 'all 0.15s',
+                textDecoration: 'none', transition: 'all 0.15s', whiteSpace: 'nowrap',
               }}
             >
               {tab.label}
@@ -77,9 +71,9 @@ function Navbar() {
       </nav>
 
       {/* 우측: 시계 + 계정 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ textAlign: 'right', fontSize: '0.78rem', color: '#64748b' }}>
-          <div>{dateStr}</div>
+      <div className="nav-right">
+        <div className="nav-clock">
+          <div className="nav-date">{dateStr}</div>
           <div style={{ fontWeight: 600, color: '#475569' }}>{timeStr}</div>
         </div>
         {token ? (
@@ -90,13 +84,14 @@ function Navbar() {
               background: '#f1f5f9', border: '1px solid #e2e8f0',
               cursor: 'pointer', fontSize: '0.75rem', color: '#64748b',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
             }}
             title="로그아웃"
           >
             👤
           </button>
         ) : (
-          <Link to="/admin/login" className="btn btn-primary" style={{ padding: '7px 14px', fontSize: '0.8rem' }}>
+          <Link to="/admin/login" className="btn btn-primary" style={{ padding: '7px 14px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
             관리자 로그인
           </Link>
         )}
@@ -111,7 +106,7 @@ function Footer() {
       background: '#1e293b', color: '#94a3b8',
       padding: '40px 40px 32px', marginTop: 'auto',
     }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 32 }}>
+      <div className="footer-grid">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <div style={{ width: 24, height: 24, background: '#10b981', borderRadius: 6 }} />
@@ -150,7 +145,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <Navbar />
-      <ToastNotification />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Routes>
           <Route path="/" element={<CctvList />} />

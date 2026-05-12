@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { cctvApi, logsApi } from '../utils/api';
 import { subscribeToAlerts } from '../utils/socket';
+import ToastNotification from '../components/ToastNotification';
 import AlertPanel from '../components/AlertPanel';
 import DetectionLog from '../components/DetectionLog';
 import StatsChart from '../components/StatsChart';
+import api from '../utils/api';
 
 export default function AdminDashboard() {
   const [cctvList, setCctvList] = useState([]);
@@ -13,7 +15,6 @@ export default function AdminDashboard() {
   const [alerts, setAlerts] = useState([]);
   const [filterType, setFilterType] = useState('');
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const LIMIT = 20;
 
   useEffect(() => {
@@ -32,9 +33,15 @@ export default function AdminDashboard() {
   }, [page, filterType]);
 
   const fetchAll = async () => {
-    setLoading(true);
-    await Promise.all([fetchCctvList(), fetchLogs(1, ''), fetchStats()]);
-    setLoading(false);
+    await Promise.all([fetchCctvList(), fetchLogs(1, ''), fetchStats(), fetchRecentAlerts()]);
+  };
+
+  const fetchRecentAlerts = async () => {
+    try {
+      const res = await logsApi.getAll(1, 20);
+      const recent = res.data.logs.map(l => ({ ...l, id: `db-${l.id}` }));
+      setAlerts(recent);
+    } catch {}
   };
 
   const fetchCctvList = async () => {
@@ -61,7 +68,8 @@ export default function AdminDashboard() {
 
   /* 요약 통계 */
   const totalCctv = cctvList.length;
-  const activeCctv = cctvList.filter(c => c.status === 'active').length;
+  const autoDetectTotal = cctvList.filter(c => c.detection_allowed).length;
+  const autoDetectConnected = cctvList.filter(c => c.detection_allowed && c.stream_connected).length;
   const todayAlerts = logs.filter(l => {
     const d = new Date(l.detected_at);
     const today = new Date();
@@ -70,13 +78,15 @@ export default function AdminDashboard() {
 
   const SUMMARY_CARDS = [
     { label: '전체 CCTV', value: totalCctv, icon: '📹', color: 'var(--accent-blue)' },
-    { label: '운영 중', value: activeCctv, icon: '🟢', color: 'var(--accent-green)' },
+    { label: '실시간 감지', value: `${autoDetectConnected} / ${autoDetectTotal}`, icon: '🟢', color: 'var(--accent-green)' },
     { label: '오늘 이상감지', value: todayAlerts, icon: '⚠️', color: 'var(--accent-yellow)' },
     { label: '전체 로그', value: logsTotal, icon: '📋', color: 'var(--accent-cyan)' },
   ];
 
   return (
-    <div style={{ minHeight: 'calc(100vh - 64px)', padding: '32px 24px' }}>
+    <>
+    <ToastNotification />
+    <div className="page-outer" style={{ minHeight: 'calc(100vh - 64px)' }}>
       <div className="container">
         {/* 헤더 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
@@ -86,13 +96,22 @@ export default function AdminDashboard() {
               실시간 이상징후 모니터링 · WebSocket 알림 연동
             </p>
           </div>
-          <button onClick={fetchAll} className="btn btn-outline" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
-            🔄 새로고침
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={fetchAll} className="btn btn-outline" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+              🔄 새로고침
+            </button>
+            <button
+              onClick={() => api.post('/api/cctv/test-alert').then(() => alert('테스트 알림 전송됨 — 우측 상단 토스트 확인')).catch(e => alert('전송 실패: ' + e))}
+              className="btn btn-outline"
+              style={{ padding: '8px 16px', fontSize: '0.85rem', borderColor: '#f59e0b', color: '#f59e0b' }}
+            >
+              🧪 WS 테스트
+            </button>
+          </div>
         </div>
 
         {/* 요약 카드 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        <div className="grid-stats">
           {SUMMARY_CARDS.map(card => (
             <div key={card.label} className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
               <div style={{ fontSize: '2rem', marginBottom: '8px' }}>{card.icon}</div>
@@ -107,7 +126,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* 메인 컨텐츠 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
+        <div className="grid-dash">
           {/* 왼쪽 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* 통계 차트 */}
@@ -118,9 +137,9 @@ export default function AdminDashboard() {
 
             {/* 로그 테이블 */}
             <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                 <h3>📋 이상징후 로그</h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="filter-bar">
                   {['', 'fire', 'smoke', 'stopped_vehicle', 'congestion'].map(type => (
                     <button
                       key={type}
@@ -172,5 +191,6 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+    </>
   );
 }

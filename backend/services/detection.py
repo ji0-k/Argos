@@ -17,9 +17,10 @@ class DetectionManager:
     def __init__(self):
         self._threads: dict[int, threading.Thread] = {}
         self._running: dict[int, bool] = {}
+        self._connected: dict[int, bool] = {}   # 스트림 실제 연결 상태
         self._last_saved: dict[int, dict] = {}  # {cctv_id: {type: timestamp}}
 
-    def start(self, cctv_id: int, session_id: int, stream_url: str, app):
+    def start(self, cctv_id: int, session_id: int, stream_url: str, app, cctv_name: str = ""):
         """백그라운드 스레드에서 감지 루프 시작"""
         if cctv_id in self._running and self._running[cctv_id]:
             logger.warning(f"이미 감지 중 (cctv_id={cctv_id})")
@@ -28,7 +29,7 @@ class DetectionManager:
         self._running[cctv_id] = True
         thread = threading.Thread(
             target=self._detection_loop,
-            args=(cctv_id, session_id, stream_url, app),
+            args=(cctv_id, session_id, stream_url, app, cctv_name),
             daemon=True,
         )
         self._threads[cctv_id] = thread
@@ -45,7 +46,7 @@ class DetectionManager:
     RETRY_LIMIT = 10       # 연속 실패 허용 횟수
     RETRY_PAUSE = 300      # 실패 후 재시도 대기 (초)
 
-    def _detection_loop(self, cctv_id: int, session_id: int, stream_url: str, app):
+    def _detection_loop(self, cctv_id: int, session_id: int, stream_url: str, app, cctv_name: str = ""):
         """프레임별 YOLO 추론 루프"""
         from services.inference import infer_fire_smoke, infer_vehicle
 
@@ -58,6 +59,7 @@ class DetectionManager:
                 ret, frame = cap.read()
                 if not ret:
                     fail_count += 1
+                    self._connected[cctv_id] = False
                     if fail_count >= self.RETRY_LIMIT:
                         logger.warning(f"스트림 {fail_count}회 실패 (id={cctv_id}) — {self.RETRY_PAUSE}초 후 재시도")
                         cap.release()
@@ -69,13 +71,15 @@ class DetectionManager:
                     continue
 
                 fail_count = 0
+                self._connected[cctv_id] = True
 
                 try:
                     fire_result = infer_fire_smoke(frame)
                     vehicle_result = infer_vehicle(frame, cctv_id)
 
                     for result in [fire_result, vehicle_result]:
-                        if result and result.get("type") != "normal":
+                        if result and result.get("type") != "normal" and result.get("confidence", 0.0) >= 0.7:
+                            self._emit_alert(cctv_id, result, cctv_name)
                             self._maybe_save(cctv_id, session_id, result, frame)
 
                 except Exception as e:
@@ -84,6 +88,20 @@ class DetectionManager:
                 time.sleep(frame_interval)
 
         cap.release()
+
+    def _emit_alert(self, cctv_id: int, result: dict, cctv_name: str = ""):
+        """shared.alert_queue에 넣어 socketio 브로드캐스터가 처리하게 함"""
+        from shared import alert_queue
+        data = {
+            "cctv_id": cctv_id,
+            "cctv_name": cctv_name or f"CCTV #{cctv_id}",
+            "type": result.get("type"),
+            "confidence": result.get("confidence", 0.0),
+            "detected_at": datetime.utcnow().isoformat() + "Z",
+        }
+        alert_queue.put(data)
+        logger.info(f"[WS] Queue에 알림 추가: type={data['type']}, cctv_id={cctv_id}")
+        print(f"[WS] Queue에 알림 추가: type={data['type']}", flush=True)
 
     def _maybe_save(self, cctv_id: int, session_id: int, result: dict, frame):
         det_type = result.get("type")
@@ -100,15 +118,12 @@ class DetectionManager:
         self._handle_detection(cctv_id, session_id, result, frame)
 
     def _handle_detection(self, cctv_id: int, session_id: int, result: dict, frame):
-        """이상 감지 시 DB 저장 + WebSocket 알림"""
-        from models.db import db, DetectionLog, CctvList
-        from app import socketio
+        """DB 저장 (0.7 이상 + 60초 쿨다운 통과한 것만)"""
+        from models.db import db, DetectionLog
 
         detection_type = result.get("type")
         confidence = result.get("confidence", 0.0)
-
         snapshot_path = self._save_snapshot(frame, cctv_id, detection_type)
-        cctv = CctvList.query.get(cctv_id)
 
         log = DetectionLog(
             cctv_id=cctv_id,
@@ -119,15 +134,6 @@ class DetectionManager:
         )
         db.session.add(log)
         db.session.commit()
-
-        socketio.emit("alert", {
-            "cctv_id": cctv_id,
-            "cctv_name": cctv.name if cctv else f"CCTV #{cctv_id}",
-            "type": detection_type,
-            "confidence": confidence,
-            "detected_at": datetime.utcnow().isoformat(),
-            "snapshot_path": snapshot_path,
-        })
 
     @staticmethod
     def _save_snapshot(frame, cctv_id: int, detection_type: str) -> str:

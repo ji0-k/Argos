@@ -4,7 +4,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_vehicle_model = None
+_vehicle_models = {}   # cctv_id → 전용 YOLO 인스턴스
 _fire_model = None
 
 VEHICLE_COCO_IDS  = {2, 3, 5, 7}  # car, motorcycle, bus, truck
@@ -18,13 +18,12 @@ TRACK_HISTORY     = {}             # cctv_id → {track_id: deque of (cx,cy,x1,y
 LATEST_BOXES: dict = {}
 
 
-def _load_vehicle_model():
-    global _vehicle_model
-    if _vehicle_model is None:
+def _load_vehicle_model(cctv_id: int = 0):
+    if cctv_id not in _vehicle_models:
         from ultralytics import YOLO
-        logger.info("YOLO 차량 모델 로딩 (yolov8n.pt)...")
-        _vehicle_model = YOLO("yolov8n.pt")
-    return _vehicle_model
+        logger.info(f"YOLO 차량 모델 로딩 (cctv_id={cctv_id})...")
+        _vehicle_models[cctv_id] = YOLO("yolov8n.pt")
+    return _vehicle_models[cctv_id]
 
 
 def _load_fire_model():
@@ -100,7 +99,7 @@ def infer_vehicle(frame_bgr: np.ndarray, cctv_id: int = 0) -> dict:
     from collections import deque
 
     try:
-        model = _load_vehicle_model()
+        model = _load_vehicle_model(cctv_id)
         results = model.track(frame_bgr, persist=True, verbose=False, tracker="bytetrack.yaml")[0]
         boxes = results.boxes
 

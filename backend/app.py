@@ -14,6 +14,8 @@ from flask_socketio import SocketIO
 from config import Config
 from models.db import db
 
+from shared import alert_queue
+
 socketio = SocketIO(cors_allowed_origins="*", async_mode="eventlet")
 
 
@@ -55,8 +57,23 @@ def _auto_start_detection(flask_app):
             session = DetectionSession(cctv_id=cctv.id)
             db.session.add(session)
             db.session.commit()
-            detection_manager.start(cctv.id, session.id, cctv.stream_url, flask_app)
+            detection_manager.start(cctv.id, session.id, cctv.stream_url, flask_app, cctv.name)
 
+
+def _alert_broadcaster():
+    """socketio.sleep() 기반 폴링 — Flask-SocketIO 공식 권장 패턴"""
+    print("[WS] Broadcaster 시작", flush=True)
+    while True:
+        socketio.sleep(0.1)          # eventlet hub에 제어 반환 (핵심)
+        try:
+            data = alert_queue.get_nowait()
+        except Exception:
+            continue                 # 데이터 없음 — 정상
+        try:
+            socketio.emit("alert", data, namespace="/")
+            print(f"[WS] Emit 성공: type={data.get('type')}", flush=True)
+        except Exception as e:
+            print(f"[WS] Emit 실패: {e}", flush=True)
 
 if __name__ == "__main__":
     import threading
@@ -66,8 +83,8 @@ if __name__ == "__main__":
         db.create_all()
         start_scheduler(app)
 
-    # YOLO 모델 로딩/스트림 연결을 백그라운드에서 처리 (Flask 응답 차단 방지)
     threading.Thread(target=_auto_start_detection, args=(app,), daemon=True).start()
+    socketio.start_background_task(_alert_broadcaster)
 
     port = int(os.getenv("PORT", 5001))
     socketio.run(app, host="0.0.0.0", port=port, debug=False, use_reloader=False)

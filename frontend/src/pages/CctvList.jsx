@@ -141,11 +141,11 @@ export default function CctvList() {
   const PANEL_HEIGHT = 560;
 
   return (
-    <div style={{ padding: '28px 32px', background: '#f8fafc', minHeight: 'calc(100vh - 64px)' }}>
+    <div className="page-outer" style={{ background: '#f8fafc', minHeight: 'calc(100vh - 64px)' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
         {/* 타이틀 + 요약 카드 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
+        <div className="monitor-header">
           <div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>실시간 교통 모니터링</h2>
             <p style={{ color: '#64748b', fontSize: '0.875rem' }}>경부고속도로 ITS CCTV 실시간 스트리밍 및 돌발정보 현황</p>
@@ -158,7 +158,7 @@ export default function CctvList() {
         </div>
 
         {/* 메인 콘텐츠: 영상/지도 + 목록 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, marginBottom: 24 }}>
+        <div className="grid-monitor">
 
           {/* 좌측: 영상 or 지도 */}
           <div style={{
@@ -334,7 +334,7 @@ export default function CctvList() {
               <p>감지된 돌발상황이 없습니다.</p>
             </div>
           ) : (
-            <table>
+            <div className="table-wrap"><table>
               <thead>
                 <tr>
                   {['시각', '유형', '위치', '상세내용', '신뢰도', '상태'].map(h => (
@@ -391,7 +391,7 @@ export default function CctvList() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>
