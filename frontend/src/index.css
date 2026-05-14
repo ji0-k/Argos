@@ -119,7 +119,7 @@ tbody td { padding: 12px 20px; }
 /* 대시보드 요약 카드 4열 */
 .grid-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 32px;
 }
@@ -127,16 +127,24 @@ tbody td { padding: 12px 20px; }
 /* 대시보드 메인 (차트+로그 / 알림패널) */
 .grid-dash {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 24px;
 }
 
 /* 모니터링 메인 (지도+영상 / CCTV 목록) */
 .grid-monitor {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 20px;
   margin-bottom: 24px;
+}
+
+/* 그리드 아이템 최솟값 0 — min-width:auto 기본값이 Chart.js 캔버스 픽셀 크기를
+   최솟값으로 강요해 트랙 밖으로 넘치는 문제 방지 */
+.grid-dash > *,
+.grid-stats > *,
+.grid-monitor > * {
+  min-width: 0;
 }
 
 /* 모니터링 페이지 헤더 (제목 + 요약카드) */

@@ -1,4 +1,5 @@
-from flask import Blueprint, jsonify, request
+import os
+from flask import Blueprint, jsonify, request, send_file
 from models.db import DetectionLog
 
 logs_bp = Blueprint("logs", __name__)
@@ -42,6 +43,15 @@ def get_cctv_logs(cctv_id):
     )
 
     return jsonify({"logs": [log.to_dict() for log in logs], "total": total, "page": page, "limit": limit})
+
+
+@logs_bp.route("/<int:log_id>/snapshot", methods=["GET"])
+def get_log_snapshot(log_id):
+    """감지 스냅샷 이미지 반환"""
+    log = DetectionLog.query.get_or_404(log_id)
+    if not log.snapshot_path or not os.path.exists(log.snapshot_path):
+        return jsonify({"error": "스냅샷 없음"}), 404
+    return send_file(log.snapshot_path, mimetype="image/jpeg")
 
 
 @logs_bp.route("/stats", methods=["GET"])

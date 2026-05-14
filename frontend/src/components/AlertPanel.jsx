@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -9,9 +9,10 @@ const TYPE_CONFIG = {
   congestion:      { icon: '🚦', text: '차량정체', cls: 'badge-congestion', bg: 'rgba(249,115,22,0.08)',     border: 'rgba(249,115,22,0.25)' },
 };
 
-function AlertItem({ alert, onDismiss }) {
+function AlertItem({ alert, onDismiss, onDetail }) {
   const cfg = TYPE_CONFIG[alert.type] || TYPE_CONFIG.fire;
   const timeAgo = formatDistanceToNow(new Date(alert.detected_at), { addSuffix: true, locale: ko });
+  const hasSnapshot = !!alert.snapshot_path;
 
   return (
     <div
@@ -25,15 +26,29 @@ function AlertItem({ alert, onDismiss }) {
         marginBottom: '10px',
       }}
     >
-      <button
-        onClick={() => onDismiss(alert.id)}
-        style={{
-          position: 'absolute', top: '8px', right: '8px',
-          background: 'none', border: 'none',
-          color: 'var(--text-muted)', cursor: 'pointer',
-          fontSize: '1rem', lineHeight: 1,
-        }}
-      >×</button>
+      {/* 닫기 + 캡처 버튼 */}
+      <div style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+        {hasSnapshot && onDetail && (
+          <button
+            onClick={() => onDetail(alert)}
+            title="상세 정보 보기"
+            style={{
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              padding: '2px 6px', fontSize: '0.8rem', lineHeight: 1,
+              color: 'var(--text-muted)',
+            }}
+          >📷</button>
+        )}
+        <button
+          onClick={() => onDismiss(alert.id)}
+          style={{
+            background: 'none', border: 'none',
+            color: 'var(--text-muted)', cursor: 'pointer',
+            fontSize: '1rem', lineHeight: 1,
+          }}
+        >×</button>
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
         <span style={{ fontSize: '1.2rem' }}>{cfg.icon}</span>
@@ -52,7 +67,7 @@ function AlertItem({ alert, onDismiss }) {
   );
 }
 
-export default function AlertPanel({ alerts }) {
+export default function AlertPanel({ alerts, onDetail }) {
   const [dismissed, setDismissed] = useState(new Set());
 
   const handleDismiss = (id) => setDismissed(prev => new Set([...prev, id]));
@@ -97,7 +112,7 @@ export default function AlertPanel({ alerts }) {
           </div>
         ) : (
           visible.map(alert => (
-            <AlertItem key={alert.id} alert={alert} onDismiss={handleDismiss} />
+            <AlertItem key={alert.id} alert={alert} onDismiss={handleDismiss} onDetail={onDetail} />
           ))
         )}
       </div>

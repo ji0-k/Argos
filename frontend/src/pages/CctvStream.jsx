@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { cctvApi, logsApi } from '../utils/api';
 import { subscribeToAlerts } from '../utils/socket';
 import DetectionLog from '../components/DetectionLog';
+import LogDetailModal from '../components/LogDetailModal';
 
 const TYPE_LABEL = {
   fire: { text: '🔥 화재', cls: 'badge-fire' },
@@ -23,6 +24,7 @@ export default function CctvStream() {
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
+  const [selectedLog, setSelectedLog] = useState(null);
   const streamRef = useRef(null);
 
   useEffect(() => {
@@ -98,6 +100,7 @@ export default function CctvStream() {
 
   return (
     <div style={{ minHeight: 'calc(100vh - 64px)', padding: '32px 24px' }}>
+    {selectedLog && <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />}
       <div className="container">
         {/* 브레드크럼 */}
         <div style={{ marginBottom: '20px', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
@@ -235,7 +238,7 @@ export default function CctvStream() {
                   총 {logsTotal}건
                 </span>
               </h3>
-              <DetectionLog logs={logs} compact />
+              <DetectionLog logs={logs} compact onDetail={setSelectedLog} />
               {logs.length === 0 && (
                 <div className="empty-state" style={{ padding: '32px' }}>
                   <p style={{ fontSize: '0.875rem' }}>감지 기록이 없습니다.</p>

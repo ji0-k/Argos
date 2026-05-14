@@ -56,13 +56,19 @@ def infer_fire_smoke(frame_bgr: np.ndarray) -> dict:
             results = model(frame_bgr, verbose=False)[0]
             boxes = results.boxes
             if boxes is not None and len(boxes) > 0:
-                best_idx = int(boxes.conf.argmax())
-                best_conf = float(boxes.conf[best_idx])
-                best_cls = int(boxes.cls[best_idx])
-                cls_name = (model.names.get(best_cls) or "fire").lower()
-                if "smoke" in cls_name:
-                    return {"type": "normal", "confidence": 0.0}  # 연기 감지 비활성화
-                return {"type": "fire", "confidence": round(best_conf, 3)}
+                fire_boxes = []
+                best_conf = 0.0
+                for i in range(len(boxes)):
+                    conf = float(boxes.conf[i])
+                    cls = int(boxes.cls[i])
+                    cls_name = (model.names.get(cls) or "fire").lower()
+                    if "smoke" in cls_name:
+                        continue  # 연기 감지 비활성화
+                    x1, y1, x2, y2 = [int(v) for v in boxes.xyxy[i].tolist()]
+                    fire_boxes.append((x1, y1, x2, y2, f"Fire {conf:.0%}", conf, (0, 30, 220)))
+                    best_conf = max(best_conf, conf)
+                if fire_boxes:
+                    return {"type": "fire", "confidence": round(best_conf, 3), "boxes": fire_boxes}
             return {"type": "normal", "confidence": 0.0}
         except Exception as e:
             logger.error(f"화재 추론 오류: {e}")

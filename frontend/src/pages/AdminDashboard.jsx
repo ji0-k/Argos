@@ -5,6 +5,7 @@ import ToastNotification from '../components/ToastNotification';
 import AlertPanel from '../components/AlertPanel';
 import DetectionLog from '../components/DetectionLog';
 import StatsChart from '../components/StatsChart';
+import LogDetailModal from '../components/LogDetailModal';
 import api from '../utils/api';
 
 export default function AdminDashboard() {
@@ -15,6 +16,7 @@ export default function AdminDashboard() {
   const [alerts, setAlerts] = useState([]);
   const [filterType, setFilterType] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedLog, setSelectedLog] = useState(null);
   const LIMIT = 20;
 
   useEffect(() => {
@@ -39,7 +41,8 @@ export default function AdminDashboard() {
   const fetchRecentAlerts = async () => {
     try {
       const res = await logsApi.getAll(1, 20);
-      const recent = res.data.logs.map(l => ({ ...l, id: `db-${l.id}` }));
+      // log_id: 모달에서 스냅샷 API 호출에 쓸 numeric ID 보존
+      const recent = res.data.logs.map(l => ({ ...l, id: `db-${l.id}`, log_id: l.id }));
       setAlerts(recent);
     } catch {}
   };
@@ -86,6 +89,7 @@ export default function AdminDashboard() {
   return (
     <>
     <ToastNotification />
+    {selectedLog && <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />}
     <div className="page-outer" style={{ minHeight: 'calc(100vh - 64px)' }}>
       <div className="container">
         {/* 헤더 */}
@@ -158,7 +162,7 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               </div>
-              <DetectionLog logs={logs} />
+              <DetectionLog logs={logs} onDetail={setSelectedLog} />
               {/* 페이지네이션 */}
               <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
                 <button
@@ -186,7 +190,7 @@ export default function AdminDashboard() {
 
           {/* 오른쪽: 실시간 알림 패널 */}
           <div>
-            <AlertPanel alerts={alerts} />
+            <AlertPanel alerts={alerts} onDetail={setSelectedLog} />
           </div>
         </div>
       </div>

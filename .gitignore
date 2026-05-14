@@ -42,6 +42,7 @@ frontend/dist/
 captures/*.jpg
 captures/*.png
 captures/*.jpeg
+backend/captures/
 
 # Database
 *.sqlite3

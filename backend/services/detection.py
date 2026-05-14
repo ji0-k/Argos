@@ -120,10 +120,13 @@ class DetectionManager:
     def _handle_detection(self, cctv_id: int, session_id: int, result: dict, frame):
         """DB 저장 (0.7 이상 + 60초 쿨다운 통과한 것만)"""
         from models.db import db, DetectionLog
+        from services.inference import LATEST_BOXES
 
         detection_type = result.get("type")
         confidence = result.get("confidence", 0.0)
-        snapshot_path = self._save_snapshot(frame, cctv_id, detection_type)
+        # 화재는 result["boxes"], 차량은 LATEST_BOXES에 저장돼 있음
+        boxes = result.get("boxes") or LATEST_BOXES.get(cctv_id, [])
+        snapshot_path = self._save_snapshot(frame, cctv_id, detection_type, boxes)
 
         log = DetectionLog(
             cctv_id=cctv_id,
@@ -136,11 +139,21 @@ class DetectionManager:
         db.session.commit()
 
     @staticmethod
-    def _save_snapshot(frame, cctv_id: int, detection_type: str) -> str:
-        """감지 시 스냅샷 이미지 저장"""
+    def _save_snapshot(frame, cctv_id: int, detection_type: str, boxes=None) -> str:
+        """감지 시 바운딩박스가 그려진 스냅샷 저장"""
         os.makedirs(Config.CAPTURES_DIR, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{timestamp}_cctv{cctv_id}_{detection_type}.jpg"
         filepath = os.path.join(Config.CAPTURES_DIR, filename)
-        cv2.imwrite(filepath, frame)
+
+        display = frame.copy()
+        for (x1, y1, x2, y2, label, conf, color) in (boxes or []):
+            cv2.rectangle(display, (x1, y1), (x2, y2), color, 2)
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            # 라벨 배경
+            cv2.rectangle(display, (x1, y1 - th - 6), (x1 + tw + 6, y1), color, -1)
+            cv2.putText(display, label, (x1 + 3, y1 - 3),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+        cv2.imwrite(filepath, display)
         return filepath

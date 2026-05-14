@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -122,7 +122,7 @@ export default function StatsChart({ data = [] }) {
   };
 
   return (
-    <div style={{ position: 'relative', height: '260px' }}>
+    <div style={{ position: 'relative', height: '260px', overflow: 'hidden' }}>
       <Bar data={{ labels, datasets }} options={{ ...options, maintainAspectRatio: false }} />
     </div>
   );

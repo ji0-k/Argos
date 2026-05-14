@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -8,6 +7,26 @@ const TYPE_CONFIG = {
   stopped_vehicle: { icon: '🚗', text: '정차차량', cls: 'badge-stopped' },
   congestion:      { icon: '🚦', text: '차량정체', cls: 'badge-congestion' },
 };
+
+function CameraBtn({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title="상세 정보 보기"
+      style={{
+        background: 'none', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+        padding: '3px 7px', fontSize: '0.85rem', lineHeight: 1,
+        color: 'var(--text-secondary)',
+        transition: 'border-color 0.15s, color 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-blue)'; e.currentTarget.style.color = 'var(--accent-blue)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+    >
+      📷
+    </button>
+  );
+}
 
 function timeAgo(dateStr) {
   try {
@@ -27,7 +46,7 @@ function formatDate(dateStr) {
 }
 
 /* compact=true → 카드형 리스트, compact=false(기본) → 테이블 */
-export default function DetectionLog({ logs = [], compact = false }) {
+export default function DetectionLog({ logs = [], compact = false, onDetail }) {
   if (logs.length === 0) {
     return (
       <div className="empty-state" style={{ padding: '32px 16px' }}>
@@ -68,10 +87,13 @@ export default function DetectionLog({ logs = [], compact = false }) {
                   {timeAgo(log.detected_at)}
                 </div>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                   {(log.confidence * 100).toFixed(0)}%
                 </div>
+                {log.snapshot_path && onDetail && (
+                  <CameraBtn onClick={() => onDetail(log)} />
+                )}
               </div>
             </div>
           );
@@ -81,7 +103,7 @@ export default function DetectionLog({ logs = [], compact = false }) {
   }
 
   return (
-    <div className="table-wrapper">
+    <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -89,7 +111,7 @@ export default function DetectionLog({ logs = [], compact = false }) {
             <th>CCTV</th>
             <th>신뢰도</th>
             <th>감지 시각</th>
-            <th>알림</th>
+            <th>캡처</th>
           </tr>
         </thead>
         <tbody>
@@ -108,11 +130,9 @@ export default function DetectionLog({ logs = [], compact = false }) {
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{
-                      height: '4px',
-                      width: '60px',
+                      height: '4px', width: '60px',
                       background: 'var(--bg-secondary)',
-                      borderRadius: '2px',
-                      overflow: 'hidden',
+                      borderRadius: '2px', overflow: 'hidden',
                     }}>
                       <div style={{
                         height: '100%',
@@ -130,8 +150,8 @@ export default function DetectionLog({ logs = [], compact = false }) {
                   {formatDate(log.detected_at)}
                 </td>
                 <td>
-                  {log.alert_sent
-                    ? <span style={{ color: 'var(--accent-green)', fontSize: '0.8rem' }}>✓ 전송</span>
+                  {log.snapshot_path && onDetail
+                    ? <CameraBtn onClick={() => onDetail(log)} />
                     : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</span>
                   }
                 </td>
