@@ -152,8 +152,8 @@ export default function CctvList() {
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <SummaryCard label="운영 CCTV" value={cctvList.length} sub={cctvList.length} color="#10b981" icon="📹" />
-            <SummaryCard label="차량정체" value={congestionCount} sub="30건" color="#f97316" icon="🚦" />
-            <SummaryCard label="화재 감지" value={fireCount} sub="30건" color="#ef4444" icon="🔥" />
+            <SummaryCard label="차량정체" value={congestionCount} sub={`${incidents.length}건`} color="#f97316" icon="🚦" />
+            <SummaryCard label="화재 감지" value={fireCount} sub={`${incidents.length}건`} color="#ef4444" icon="🔥" />
           </div>
         </div>
 

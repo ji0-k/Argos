@@ -145,7 +145,10 @@ def infer_vehicle(frame_bgr: np.ndarray, cctv_id: int = 0) -> dict:
         # 정체: 3초 이상(CONGESTION_FRAMES) 정지 차량이 CONGESTION_COUNT대 이상
         congested_tids = [tid for tid, dq in hist.items() if is_stopped(dq, CONGESTION_FRAMES)]
         if len(congested_tids) >= CONGESTION_COUNT:
-            conf = sum(t[7] for t in tracks) / len(tracks)
+            congested_set = set(congested_tids)
+            stopped_tracks = [t for t in tracks if t[0] in congested_set]
+            # 전체 평균 대신 정지 차량 중 최고 신뢰도 사용 (카메라가 멀어 평균이 낮은 경우 대비)
+            conf = max((t[7] for t in stopped_tracks), default=0.0)
             LATEST_BOXES[cctv_id] = [
                 (t[3], t[4], t[5], t[6], f"Congestion {t[7]:.0%}", t[7], (0, 50, 220))
                 for t in tracks

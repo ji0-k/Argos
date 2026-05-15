@@ -60,12 +60,12 @@ def get_stats():
     from sqlalchemy import func, text
     from models.db import db
 
-    # SQLite 호환: strftime 사용 (PostgreSQL은 date_trunc)
+    # 날짜 무관, 시간대(0~23)만으로 집계
     engine_name = db.engine.dialect.name
     if engine_name == "postgresql":
-        hour_expr = func.date_trunc("hour", DetectionLog.detected_at).label("hour")
+        hour_expr = func.to_char(DetectionLog.detected_at, "HH24").label("hour")
     else:
-        hour_expr = func.strftime("%Y-%m-%dT%H:00:00", DetectionLog.detected_at).label("hour")
+        hour_expr = func.strftime("%H", DetectionLog.detected_at).label("hour")
 
     stats = (
         db.session.query(
@@ -75,7 +75,6 @@ def get_stats():
         )
         .group_by("hour", DetectionLog.type)
         .order_by("hour")
-        .limit(168)
         .all()
     )
 

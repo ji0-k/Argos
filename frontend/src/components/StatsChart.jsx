@@ -26,13 +26,8 @@ const TYPE_STYLE = {
   congestion:      { label: '🚦 차량정체', color: 'rgba(249,115,22,0.8)',   border: 'rgba(249,115,22,1)' },
 };
 
-function formatHour(isoStr) {
-  try {
-    const d = new Date(isoStr);
-    return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}시`;
-  } catch {
-    return isoStr;
-  }
+function formatHour(hour) {
+  return `${parseInt(hour, 10)}시`;
 }
 
 export default function StatsChart({ data = [] }) {

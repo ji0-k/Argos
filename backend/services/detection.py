@@ -8,6 +8,29 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+# 감지 유형별 알림/저장 신뢰도 임계값
+CONFIDENCE_THRESHOLD = {
+    "fire": 0.7,
+    "stopped_vehicle": 0.7,
+    "congestion": 0.4,
+}
+
+
+def _drain_and_read(cap, drain=8):
+    """버퍼에 쌓인 오래된 프레임을 버리고 최신 프레임 반환.
+
+    cap.read()를 2초마다 한 번만 호출하면 버퍼에 ~50프레임이 쌓인다.
+    grab()으로 빠르게 스킵한 뒤 retrieve()로 최신 프레임만 디코딩한다.
+    """
+    grabbed = False
+    for _ in range(drain):
+        if not cap.grab():
+            break
+        grabbed = True
+    if grabbed:
+        return cap.retrieve()
+    return cap.read()
+
 
 class DetectionManager:
     """감지 세션을 관리하는 매니저 - 로컬 YOLO 추론"""
@@ -17,11 +40,10 @@ class DetectionManager:
     def __init__(self):
         self._threads: dict[int, threading.Thread] = {}
         self._running: dict[int, bool] = {}
-        self._connected: dict[int, bool] = {}   # 스트림 실제 연결 상태
-        self._last_saved: dict[int, dict] = {}  # {cctv_id: {type: timestamp}}
+        self._connected: dict[int, bool] = {}
+        self._last_saved: dict[int, dict] = {}
 
     def start(self, cctv_id: int, session_id: int, stream_url: str, app, cctv_name: str = ""):
-        """백그라운드 스레드에서 감지 루프 시작"""
         if cctv_id in self._running and self._running[cctv_id]:
             logger.warning(f"이미 감지 중 (cctv_id={cctv_id})")
             return
@@ -37,26 +59,26 @@ class DetectionManager:
         logger.info(f"감지 시작 (cctv_id={cctv_id}, session_id={session_id})")
 
     def stop(self, cctv_id: int):
-        """감지 루프 중지"""
         self._running[cctv_id] = False
         from services.inference import LATEST_BOXES
         LATEST_BOXES.pop(cctv_id, None)
         logger.info(f"감지 중지 요청 (cctv_id={cctv_id})")
 
-    RETRY_LIMIT = 10       # 연속 실패 허용 횟수
-    RETRY_PAUSE = 300      # 실패 후 재시도 대기 (초)
+    RETRY_LIMIT = 10
+    RETRY_PAUSE = 300
 
     def _detection_loop(self, cctv_id: int, session_id: int, stream_url: str, app, cctv_name: str = ""):
-        """프레임별 YOLO 추론 루프"""
         from services.inference import infer_fire_smoke, infer_vehicle
 
         cap = cv2.VideoCapture(stream_url)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 버퍼 최소화
         frame_interval = 2.0
         fail_count = 0
 
         with app.app_context():
             while self._running.get(cctv_id, False):
-                ret, frame = cap.read()
+                ret, frame = _drain_and_read(cap)
+
                 if not ret:
                     fail_count += 1
                     self._connected[cctv_id] = False
@@ -65,6 +87,7 @@ class DetectionManager:
                         cap.release()
                         time.sleep(self.RETRY_PAUSE)
                         cap = cv2.VideoCapture(stream_url)
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                         fail_count = 0
                     else:
                         time.sleep(1)
@@ -78,19 +101,22 @@ class DetectionManager:
                     vehicle_result = infer_vehicle(frame, cctv_id)
 
                     for result in [fire_result, vehicle_result]:
-                        if result and result.get("type") != "normal" and result.get("confidence", 0.0) >= 0.7:
+                        if not result or result.get("type") == "normal":
+                            continue
+                        det_type = result.get("type")
+                        threshold = CONFIDENCE_THRESHOLD.get(det_type, 0.7)
+                        if result.get("confidence", 0.0) >= threshold:
                             self._emit_alert(cctv_id, result, cctv_name)
                             self._maybe_save(cctv_id, session_id, result, frame)
 
                 except Exception as e:
                     logger.error(f"감지 루프 오류: {e}")
 
-                time.sleep(frame_interval)
+                time.sleep(frame_interval)  # eventlet이 패치 → 이 sleep 동안 HTTP 처리
 
         cap.release()
 
     def _emit_alert(self, cctv_id: int, result: dict, cctv_name: str = ""):
-        """shared.alert_queue에 넣어 socketio 브로드캐스터가 처리하게 함"""
         from shared import alert_queue
         data = {
             "cctv_id": cctv_id,
@@ -106,8 +132,9 @@ class DetectionManager:
     def _maybe_save(self, cctv_id: int, session_id: int, result: dict, frame):
         det_type = result.get("type")
         confidence = result.get("confidence", 0.0)
+        threshold = CONFIDENCE_THRESHOLD.get(det_type, 0.7)
 
-        if confidence < 0.7:
+        if confidence < threshold:
             return
 
         now = time.time()
@@ -118,17 +145,15 @@ class DetectionManager:
         self._handle_detection(cctv_id, session_id, result, frame)
 
     def _handle_detection(self, cctv_id: int, session_id: int, result: dict, frame):
-        """DB 저장 (0.7 이상 + 60초 쿨다운 통과한 것만)"""
         from models.db import db, DetectionLog
         from services.inference import LATEST_BOXES
 
         detection_type = result.get("type")
         confidence = result.get("confidence", 0.0)
-        # 화재는 result["boxes"], 차량은 LATEST_BOXES에 저장돼 있음
         boxes = result.get("boxes") or LATEST_BOXES.get(cctv_id, [])
         snapshot_path = self._save_snapshot(frame, cctv_id, detection_type, boxes)
 
-        log = DetectionLog(
+        log = DetectionLog(  # type: ignore[call-arg]
             cctv_id=cctv_id,
             session_id=session_id,
             type=detection_type,
@@ -140,7 +165,6 @@ class DetectionManager:
 
     @staticmethod
     def _save_snapshot(frame, cctv_id: int, detection_type: str, boxes=None) -> str:
-        """감지 시 바운딩박스가 그려진 스냅샷 저장"""
         os.makedirs(Config.CAPTURES_DIR, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{timestamp}_cctv{cctv_id}_{detection_type}.jpg"
@@ -150,7 +174,6 @@ class DetectionManager:
         for (x1, y1, x2, y2, label, conf, color) in (boxes or []):
             cv2.rectangle(display, (x1, y1), (x2, y2), color, 2)
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            # 라벨 배경
             cv2.rectangle(display, (x1, y1 - th - 6), (x1 + tw + 6, y1), color, -1)
             cv2.putText(display, label, (x1 + 3, y1 - 3),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)

@@ -95,7 +95,6 @@ def stop_detection(cctv_id):
     detection_manager.stop(cctv_id)
 
     if session_id:
-        from datetime import datetime
         session = DetectionSession.query.get(session_id)
         if session:
             session.ended_at = datetime.utcnow()
