@@ -117,17 +117,6 @@ export default function AdminLogin() {
               }
             </button>
           </form>
-
-          <div style={{
-            marginTop: '20px',
-            padding: '12px',
-            background: 'var(--bg-secondary)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '0.8rem',
-            color: 'var(--text-muted)',
-          }}>
-            💡 초기 계정: <code>admin</code> / <code>admin1234</code>
-          </div>
         </div>
       </div>
     </div>

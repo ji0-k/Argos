@@ -46,6 +46,25 @@ def create_app():
 
 app = create_app()
 
+def _seed_admin_user():
+    """.env의 ADMIN_USERNAME/ADMIN_PASSWORD로 관리자 계정 자동 생성·갱신 (자격증명을 git에 남기지 않기 위함)"""
+    import bcrypt
+    from models.db import db, AdminUser
+
+    username = os.getenv("ADMIN_USERNAME")
+    password = os.getenv("ADMIN_PASSWORD")
+    if not username or not password:
+        return
+
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    user = AdminUser.query.filter_by(username=username).first()
+    if user:
+        user.password = hashed
+    else:
+        db.session.add(AdminUser(username=username, password=hashed))  # type: ignore[call-arg]
+    db.session.commit()
+
+
 def _auto_start_detection(flask_app):
     from models.db import db, CctvList, DetectionSession
     from routes.cctv import detection_manager, AUTO_DETECT_NAMES
@@ -81,6 +100,7 @@ if __name__ == "__main__":
 
     with app.app_context():
         db.create_all()
+        _seed_admin_user()
         start_scheduler(app)
 
     threading.Thread(target=_auto_start_detection, args=(app,), daemon=True).start()

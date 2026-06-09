@@ -49,13 +49,9 @@ CREATE INDEX IF NOT EXISTS idx_detection_log_detected_at ON detection_log(detect
 CREATE INDEX IF NOT EXISTS idx_detection_log_type ON detection_log(type);
 CREATE INDEX IF NOT EXISTS idx_cctv_list_region ON cctv_list(region);
 
--- ======================================
--- 초기 관리자 계정 (admin / admin1234)
--- bcrypt hash of 'admin1234'
--- ======================================
-INSERT INTO admin_user (username, password) VALUES
-('admin', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.s5uADK')
-ON CONFLICT (username) DO NOTHING;
+-- 관리자 계정은 여기서 생성하지 않음.
+-- 앱 시작 시 backend/app.py가 .env의 ADMIN_USERNAME/ADMIN_PASSWORD를 읽어
+-- bcrypt 해싱 후 자동 생성/갱신함 (자격증명이 git에 남지 않도록 하기 위함).
 
 -- ======================================
 -- 테스트용 CCTV 샘플 데이터

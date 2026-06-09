@@ -2,11 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 세션 시작 시
+- 반드시 `PROJECT_MAP.md`를 먼저 읽고 프로젝트 구조를 파악할 것
+
 ## 규칙
 - 명령어 실행 전 항상 현재 디렉토리 확인
 - 에러 발생 시 원인 먼저 설명 후 해결책 제시
 - 불필요한 설명 생략, 핵심만 간결하게
 - 작업 완료 후 다음 단계 안내
+
+## 협업 규칙
+- `.env` 파일은 절대 Read/Edit/Write 하지 말 것 — 어떤 키/값을 추가해야 하는지만 텍스트로 알려줄 것
+- 백엔드(`backend/`) 작업 시작 전 반드시 먼저 알릴 것: "가상환경 활성화하세요 → `backend\venv\Scripts\activate`"
 
 ## 코딩 규칙
 - 구현 전 가정을 명확히 하고, 불확실하면 질문하기
@@ -19,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 환경
 - OS: Windows
-- 작업 폴더: `C:\Argos`
+- 작업 폴더: `c:\004.miniproject\Argos`
 - Flask 포트: 5001 (5000은 Windows 시스템이 점유)
 - React 포트: 3000 (proxy → localhost:5001)
 
